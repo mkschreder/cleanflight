@@ -528,10 +528,12 @@ void processLoopback(void) {
 int main(void) {
     init();
 
+
     while (1) {
         loop();
         processLoopback();
     }
+
 }
 
 void HardFault_Handler(void)

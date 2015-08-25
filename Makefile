@@ -255,6 +255,7 @@ COMMON_SRC	 = build_config.c \
 		   sensors/compass.c \
 		   sensors/gyro.c \
 		   sensors/initialisation.c \
+		   DCM/MahonyAHRS.c \
 		   $(CMSIS_SRC) \
 		   $(DEVICE_STDPERIPH_SRC)
 

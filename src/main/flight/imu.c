@@ -226,7 +226,7 @@ int16_t imuCalculateHeading(t_fp_vector *vec)
     return head;
 }
 
-static void imuCalculateEstimatedAttitude(void)
+void imuCalculateEstimatedAttitude(void)
 {
     int32_t axis;
     int32_t accMag = 0;
