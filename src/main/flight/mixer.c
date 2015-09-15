@@ -576,7 +576,7 @@ float requestedTiltServoAngle() {
         userInput = rcData[PITCH];
     }
 
-    if (FLIGHT_MODE(ANGLE_MODE)) {
+    if ( !FLIGHT_MODE(ANGLE_MODE) && !FLIGHT_MODE(HORIZON_MODE) ) {
         //user input is from 1000 to 2000, we want to scale it from -10deg to +10deg
         float servoAngle;
         if (userInput > 1500) {
