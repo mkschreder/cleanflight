@@ -643,7 +643,7 @@ void mixTilting(void) {
 
         if (pitchToCompensate > 0 && angleTilt + bodyPitch < M_PIf / 2) { //if there is something to compensate, and only from 0 to 90, otherwise it will push you into the ground
             uint16_t liftOffTrust = ((rxConfig->maxcheck - rxConfig->mincheck) * tiltArmConfig->thrustLiftoffPercent) / 100; //force this order so we don't need float!
-            uint16_t liftOffLimit = ((rxConfig->maxcheck - rxConfig->mincheck) * 80) / 100; //we will artificially limit the trust compensation to 80%
+            uint16_t liftOffLimit = ( (rcCommand[THROTTLE]-(rxConfig->maxcheck - rxConfig->mincheck)) * 80) / 100; //we will artificially limit the trust compensation to 80% of remaining trust
 
             float tmp_cos_compensate = cosf(pitchToCompensate);
             if (tmp_cos_compensate != 0) { //it may be zero if the pitchToCOmpensate is 90°, also if it is very close due to float approximation.
