@@ -749,7 +749,7 @@ static void cliShowTiltArm(char *cmdline) {
 #else
     extern ledConfig_t *ledConfigs;
     for (int i = 0; i < NUM_PIXELS_TO_USE; i++) {
-        ledConfigs[i].flags |= LED_FUNCTION_COLOR;
+        ledConfigs[i].flags |= LED_FUNCTION_COLOR;//et the led to use fixed color. Should override any other flag
     }
     int16_t loop = -1; //infinite
     if (!isEmpty(cmdline)) {
