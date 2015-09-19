@@ -45,6 +45,7 @@
 #include "drivers/timer.h"
 #include "drivers/pwm_rx.h"
 #include "drivers/pwm_output.h"
+#include "drivers/light_ws2811strip.h"
 
 #include "io/escservo.h"
 #include "io/gps.h"
@@ -715,9 +716,10 @@ void colorUntil(int pos) {
     extern ledConfig_t *ledConfigs;
     if (pos == 0) {
         for (int i = 0; i < NUM_PIXELS_TO_USE; i++) {
-            ledConfigs[i].color = 10;
+            ledConfigs[i].color = 6;
         }
         reevalulateLedConfig(); // This sends the updated pixel color to the hardware.
+        updateLedStrip();
         return;
     }
 
@@ -726,66 +728,82 @@ void colorUntil(int pos) {
     for (int i = 0; i < halfNumPixel; i++) {
 
         if (i < mappatura) {
-            ledConfigs[i].color = 2;
+            ledConfigs[i+halfNumPixel].color = 2;
         } else {
-            ledConfigs[i].color = 1;
+            ledConfigs[i+halfNumPixel].color = 1;
         }
     }
 
     for (int i = -halfNumPixel; i < 0; i++) {
         if (mappatura - 1 < i) {
-            ledConfigs[i].color = 2;
+            ledConfigs[i+halfNumPixel].color = 2;
         } else {
-            ledConfigs[i].color = 1;
+            ledConfigs[i+halfNumPixel].color = 1;
         }
     }
 
     reevalulateLedConfig(); // This sends the updated pixel color to the hardware.
+    updateLedStrip();
 }
 
 static void cliShowTiltArm(char *cmdline) {
 #ifndef USE_SERVOS
     UNUSED(cmdline);
 #else
+    printf("a\n");
     extern ledConfig_t *ledConfigs;
+    extern const hsvColor_t hsv_orange;
     for (int i = 0; i < NUM_PIXELS_TO_USE; i++) {
         ledConfigs[i].flags |= LED_FUNCTION_COLOR;//et the led to use fixed color. Should override any other flag
+        ledConfigs[i].color = 0;
+        setLedHsv(i, &hsv_orange);
     }
+
+    printf("b\n");
+    ws2811UpdateStrip();
+    delay(1000);
+    printf("c\n");
     int16_t loop = -1; //infinite
     if (!isEmpty(cmdline)) {
         loop = atoi(cmdline);
     }
-
+    printf("d\n");
     pwmWriteServo(0, 1500); //mid points
 
     const uint16_t MAX_POS = 5; //in degree
     uint8_t iteration = 0, directionServo = 1;
     uint32_t start = millis();
+    printf("e\n");
     while (loop > 0 || loop == -1) {
 
-        if (millis() - start % 10000 == 0) { //every 10 seconds
+        if (millis() - start > 10000) { //every 10 seconds
             printf("Test swipe uptime in seconds: %d\n", millis() - start / 1000);
+            start = millis();
         }
 
         colorUntil(iteration);
-
+        printf("1\n");
         pwmWriteServo(0, 1500 - 100 * iteration);
+        printf("2\n");
         delay(1000);
-
+        printf("3\n");
         colorUntil(-iteration);
-
+        printf("4\n");
         pwmWriteServo(0, 1500 + 100 * iteration);
+        printf("5\n");
         delay(1000);
-
+        printf("6\n");
         iteration += directionServo;
         if (iteration >= MAX_POS || iteration <= 0) {
             directionServo *= -1;
         }
-
+        printf("7\n");
         if (loop > 0) {
             loop--;
         }
+        printf("8\n");
     }
+    printf("end\n");
 #endif
 }
 
