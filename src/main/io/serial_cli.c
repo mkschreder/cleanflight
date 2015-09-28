@@ -730,7 +730,7 @@ void colorUntil(int pos) {
         if (i < mappatura) {
             ledConfigs[i+halfNumPixel].color = 2;
         } else {
-            ledConfigs[i+halfNumPixel].color = 1;
+            ledConfigs[i+halfNumPixel].color = 10;
         }
     }
 
@@ -738,7 +738,7 @@ void colorUntil(int pos) {
         if (mappatura - 1 < i) {
             ledConfigs[i+halfNumPixel].color = 2;
         } else {
-            ledConfigs[i+halfNumPixel].color = 1;
+            ledConfigs[i+halfNumPixel].color = 10;
         }
     }
 

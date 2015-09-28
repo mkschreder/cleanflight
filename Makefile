@@ -390,6 +390,7 @@ OLIMEXINO_SRC	 = startup_stm32f10x_md_gcc.S \
 
 ifeq ($(OPBL),yes)
 ifneq ($(filter $(TARGET),$(OPBL_VALID_TARGETS)),)
+$(warning OPBL used)
 TARGET_FLAGS := -DOPBL $(TARGET_FLAGS)
 LD_SCRIPT	 = $(LINKER_DIR)/stm32_flash_f103_$(FLASH_SIZE)k_opbl.ld
 .DEFAULT_GOAL := binary
