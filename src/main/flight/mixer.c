@@ -568,15 +568,17 @@ uint8_t hasTiltingMotor() {
  */
 float requestedTiltServoAngle() {
     uint16_t userInput = 0;
-
+    uint8_t isFixedPitch = false;
     //get wanted position of the tilting servo
     if (rcData[tiltArmConfig->channel] >= rxConfig->midrc) {
         userInput = rcData[tiltArmConfig->channel];
+        isFixedPitch = true;
     } else {
         userInput = rcData[PITCH];
     }
 
-    if ( !FLIGHT_MODE(ANGLE_MODE) && !FLIGHT_MODE(HORIZON_MODE) ) {
+    float servoAngle = 0;
+    if ( !FLIGHT_MODE(ANGLE_MODE) && !FLIGHT_MODE(HORIZON_MODE) && !isFixedPitch ) {
         //user input is from 1000 to 2000, we want to scale it from -10deg to +10deg
         float servoAngle;
         if (userInput > 1500) {
@@ -585,7 +587,7 @@ float requestedTiltServoAngle() {
                 servoAngle = 0;
             }
         } else {
-            servoAngle = scaleRangef(userInput, 1000, 1400, -0.017f, 0);
+            servoAngle = scaleRangef(userInput, 1400, 1000, 0, -0.017f);
             if (servoAngle > 0) { //dead band
                 servoAngle = 0;
             }
@@ -593,25 +595,21 @@ float requestedTiltServoAngle() {
 
         lastServoAngleTilt += servoAngle;
 
-        // just to be sure and to prevent "ANGLE MODE" do to bad thing
+        // just to be sure
         lastServoAngleTilt = constrainf(lastServoAngleTilt, -degreesToRadians(servoConf[TILTING_SERVO].angleAtMin), degreesToRadians(servoConf[TILTING_SERVO].angleAtMax));
 
-        return lastServoAngleTilt;
-    }
-
-    //convert to radiant, keep eventual non-linearity of range
-    float servoAngle;
-    if (userInput > 1500)
-        servoAngle = scaleRangef(userInput, 1500, 2000, 0, degreesToRadians(servoConf[TILTING_SERVO].angleAtMax));
-    else
-        servoAngle = scaleRangef(userInput, 1000, 1500, -degreesToRadians(servoConf[TILTING_SERVO].angleAtMin), 0);
-
-    servoAngle = (servoAngle * tiltArmConfig->gearRatioPercent) / 100.0f;
-
-    if (!FLIGHT_MODE(ANGLE_MODE)) {
+        servoAngle = lastServoAngleTilt;
+    }else{
         lastServoAngleTilt = 0; //reset
-    }
 
+        //convert to radiant, keep eventual non-linearity of range
+        if (userInput > 1500)
+            servoAngle = scaleRangef(userInput, 1500, 2000, 0, degreesToRadians(servoConf[TILTING_SERVO].angleAtMax));
+        else
+            servoAngle = scaleRangef(userInput, 1000, 1500, -degreesToRadians(servoConf[TILTING_SERVO].angleAtMin), 0);
+
+        servoAngle = (servoAngle * tiltArmConfig->gearRatioPercent) / 100.0f;
+    }
     return servoAngle;
 }
 

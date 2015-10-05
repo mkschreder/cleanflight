@@ -721,7 +721,7 @@ void loop(void)
 #ifdef USE_SERVOS
         //TODO: is good here?
         if ( (masterConfig.mixerMode == MIXER_QUADX_TILT || masterConfig.mixerMode == MIXER_OCTOX_TILT) && (currentProfile->tiltArm.flagEnabled & TILT_ARM_ENABLE_PITCH) ) {
-            // compensate the pitch if in dynamic mode to be less aggressive; we use 0 for now
+            // compensate the pitch if in dynamic mode to be less aggressive
             if (rcData[currentProfile->tiltArm.channel] < masterConfig.rxConfig.midrc) {
        	        rcCommand[PITCH] /= currentProfile->tiltArm.pitchDivisior;
        	    }
