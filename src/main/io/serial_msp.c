@@ -55,6 +55,7 @@
 #include "io/flashfs.h"
 #include "io/transponder_ir.h"
 #include "io/asyncfatfs/asyncfatfs.h"
+#include "io/tilt_arm_control.h"
 
 #include "telemetry/telemetry.h"
 
@@ -722,6 +723,14 @@ static bool processOutCommand(uint8_t cmdMSP)
             serialize8(currentProfile->servoConf[i].forwardFromChannel);
             serialize32(currentProfile->servoConf[i].reversedSources);
         }
+        break;
+    case MSP_TILT_ARM_CONFIG:
+        headSerialReply(5);
+        serialize8( currentProfile->tiltArm.flagEnabled );
+        serialize8( currentProfile->tiltArm.pitchDivisior );
+        serialize8( currentProfile->tiltArm.thrustLiftoffPercent );
+        serialize8( currentProfile->tiltArm.gearRatioPercent );
+        serialize8( currentProfile->tiltArm.channel );
         break;
     case MSP_SERVO_MIX_RULES:
         headSerialReply(MAX_SERVO_RULES * sizeof(servoMixer_t));
@@ -1400,6 +1409,16 @@ static bool processInCommand(void)
             currentProfile->servoConf[i].forwardFromChannel = read8();
             currentProfile->servoConf[i].reversedSources = read32();
         }
+#endif
+        break;
+
+case MSP_SET_TILT_ARM:
+#ifdef USE_SERVOS
+        currentProfile->tiltArm.flagEnabled = read8();
+        currentProfile->tiltArm.pitchDivisior = read8();
+        currentProfile->tiltArm.thrustLiftoffPercent = read8();
+        currentProfile->tiltArm.gearRatioPercent = read8();
+        currentProfile->tiltArm.channel = read8();
 #endif
         break;
         

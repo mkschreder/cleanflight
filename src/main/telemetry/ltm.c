@@ -50,6 +50,7 @@
 #include "drivers/pwm_rx.h"
 
 #include "io/rc_controls.h"
+#include "io/tilt_arm_control.h"
 
 #include "sensors/sensors.h"
 #include "sensors/acceleration.h"

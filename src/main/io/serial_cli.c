@@ -58,6 +58,7 @@
 #include "io/flashfs.h"
 #include "io/beeper.h"
 #include "io/asyncfatfs/asyncfatfs.h"
+#include "io/tilt_arm_control.h"
 
 #include "rx/rx.h"
 #include "rx/spektrum.h"
@@ -121,6 +122,7 @@ static void cliSerial(char *cmdline);
 #ifdef USE_SERVOS
 static void cliServo(char *cmdline);
 static void cliServoMix(char *cmdline);
+static void cliTiltArm(char *cmdline);
 #endif
 
 static void cliSet(char *cmdline);
@@ -297,6 +299,11 @@ const clicmd_t cmdTable[] = {
         "\treset\r\n"
         "\tload <mixer>\r\n"
         "\treverse <servo> <source> r|n", cliServoMix),
+    CLI_COMMAND_DEF("tilt", "Tilt drone configuration",
+            "<enable pitch divider> <enable thrust compensation> <enable yaw-roll compensation> <enable thrust body compensation> <pitch divider> <thrust liftoff percent> <gear ratio> <tilt channel>\r\n"
+            "\treset\r\n"
+            "\tload <mixer>\r\n"
+            "\treverse <servo> <source> r|n", cliTiltArm),
 #endif
 #ifdef USE_SDCARD
     CLI_COMMAND_DEF("sd_info", "sdcard info", NULL, cliSdInfo),
@@ -1258,6 +1265,132 @@ static void cliColor(char *cmdline)
 #endif
 
 #ifdef USE_SERVOS
+
+static void cliTiltArm(char *cmdline)
+{
+    enum { TILT_ARM_ARGUMENT_COUNT = 8 };
+    int16_t arguments[TILT_ARM_ARGUMENT_COUNT];
+
+    tiltArmConfig_t *tilt;
+
+    char *ptr;
+
+    if (isEmpty(cmdline)) {
+        // print out settings
+        tilt = &currentProfile->tiltArm;
+        printf("tilt_arm");
+
+        printf("\r\npitch compensation");
+        if (tilt->flagEnabled & TILT_ARM_ENABLE_PITCH_DIVIDER){
+        	printf(" ENABLED");
+        }else{
+        	printf(" DISABLED");
+        }
+        printf(" pitch compensation factor: %d",
+            tilt->pitchDivisior
+        );
+
+        printf("\r\nthrust compensation");
+        if (tilt->flagEnabled & TILT_ARM_ENABLE_THRUST_COMPENSATION){
+            printf(" ENABLED");
+        }else{
+            printf(" DISABLED");
+        }
+        printf(" thrust liftoff value: %d",
+            tilt->thrustLiftoffPercent
+        );
+        printf("\r\nbody thrust compensation");
+        if (tilt->flagEnabled & TILT_ARM_ENABLE_THRUST_BODY_COMPENSATION){
+            printf(" ENABLED");
+        }else{
+            printf(" DISABLED");
+        }
+
+        printf("\r\nyaw-roll compensation");
+        if (tilt->flagEnabled & TILT_ARM_ENABLE_YAW_ROLL_COMPENSATION){
+            printf(" ENABLED");
+        }else{
+            printf(" DISABLED");
+        }
+
+        printf("\r\ngear ratio percent: %d",
+            tilt->gearRatioPercent
+        );
+
+        printf("\r\ntilt control channel index: %d",
+            tilt->channel
+        );
+
+        printf("\r\n");
+
+    } else {
+        int validArgumentCount = 0;
+
+        ptr = cmdline;
+
+        // Command line is integers (possibly negative) separated by spaces, no other characters allowed.
+
+        // If command line doesn't fit the format, don't modify the config
+        while (*ptr) {
+            if ( *ptr >= '0' && *ptr <= '9' ) {
+                if (validArgumentCount >= TILT_ARM_ARGUMENT_COUNT) {
+                    cliPrint("Parse error\r\n");
+                    return;
+                }
+
+                if (validArgumentCount == 7){
+                    int val = atoi(ptr);
+                    if (val >= 0 && val < MAX_AUX_CHANNEL_COUNT) {
+                        arguments[validArgumentCount++] = atoi(ptr);
+                    }else{
+                        cliPrint("Parse error, channel number is invalid\r\n");
+                        return;
+                    }
+                }else{
+                    arguments[validArgumentCount++] = atoi(ptr);
+                }
+
+                do {
+                    ptr++;
+                } while ( *ptr >= '0' && *ptr <= '9' );
+            } else if (*ptr == ' ') {
+                ptr++;
+            } else {
+                cliPrint("Parse error\r\n");
+                return;
+            }
+        }
+
+        // Check we got the right number of args
+        if (validArgumentCount != TILT_ARM_ARGUMENT_COUNT) {
+            cliPrint("Parse error\r\n");
+            return;
+        }
+
+        tilt = &currentProfile->tiltArm;
+
+        tilt->flagEnabled = 0;
+        if (arguments[0]){
+        	tilt->flagEnabled |= TILT_ARM_ENABLE_PITCH_DIVIDER;
+        }
+        if (arguments[1]){
+            tilt->flagEnabled |= TILT_ARM_ENABLE_THRUST_COMPENSATION;
+        }
+        if (arguments[2]){
+            tilt->flagEnabled |= TILT_ARM_ENABLE_YAW_ROLL_COMPENSATION;
+        }
+        if (arguments[3]){
+            tilt->flagEnabled |= TILT_ARM_ENABLE_THRUST_BODY_COMPENSATION;
+        }
+        tilt->pitchDivisior = arguments[4];
+        tilt->thrustLiftoffPercent = arguments[5];
+
+        tilt->gearRatioPercent = arguments[6];
+
+        tilt->channel = arguments[7];
+    }
+}
+
 static void cliServo(char *cmdline)
 {
     enum { SERVO_ARGUMENT_COUNT = 8 };
@@ -2327,6 +2460,7 @@ static void cliSet(char *cmdline)
 
                 bool changeValue = false;
                 int_float_value_t tmp;
+				tmp.float_value = 0; 
                 switch (valueTable[i].type & VALUE_MODE_MASK) {
                     case MODE_DIRECT: {
                             int32_t value = 0;

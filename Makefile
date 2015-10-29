@@ -737,7 +737,6 @@ ASFLAGS		 = $(ARCH_FLAGS) \
 
 LDFLAGS		 = -lm \
 		   -nostartfiles \
-		   --specs=nano.specs \
 		   -lc \
 		   -lnosys \
 		   $(ARCH_FLAGS) \

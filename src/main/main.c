@@ -67,6 +67,7 @@
 #include "io/display.h"
 #include "io/asyncfatfs/asyncfatfs.h"
 #include "io/transponder_ir.h"
+#include "io/tilt_arm_control.h"
 
 #include "sensors/sensors.h"
 #include "sensors/sonar.h"
