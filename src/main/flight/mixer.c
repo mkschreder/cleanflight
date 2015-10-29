@@ -40,6 +40,7 @@
 #include "io/gimbal.h"
 #include "io/escservo.h"
 #include "io/rc_controls.h"
+#include "io/tilt_arm_control.h"
 
 #include "sensors/sensors.h"
 #include "sensors/acceleration.h"
@@ -69,8 +70,8 @@ static rxConfig_t *rxConfig;
 static mixerMode_e currentMixerMode;
 static motorMixer_t currentMixer[MAX_SUPPORTED_MOTORS];
 
-
 #ifdef USE_SERVOS
+static tiltArmConfig_t *tiltArmConfig;
 static uint8_t servoRuleCount = 0;
 static servoMixer_t currentServoMixer[MAX_SERVO_RULES];
 static gimbalConfig_t *gimbalConfig;
@@ -79,6 +80,7 @@ static int useServo;
 STATIC_UNIT_TESTED uint8_t servoCount;
 static servoParam_t *servoConf;
 static lowpass_t lowpassFilters[MAX_SUPPORTED_SERVOS];
+static float lastServoAngleTilt = 0;
 #endif
 
 static const motorMixer_t mixerQuadX[] = {
@@ -231,6 +233,8 @@ const mixer_t mixers[] = {
     { 2, true,  mixerDualcopter },     // MIXER_DUALCOPTER
     { 1, true,  NULL },                // MIXER_SINGLECOPTER
     { 4, false, mixerAtail4 },         // MIXER_ATAIL4
+    { 4, true,  mixerQuadX },          // MIXER_TILT_OCTOX4
+    { 8, true,  mixerOctoX8 },         // MIXER_TILT_OCTOX8
     { 0, false, NULL },                // MIXER_CUSTOM
     { 2, true,  NULL },                // MIXER_CUSTOM_AIRPLANE
     { 3, true,  NULL },                // MIXER_CUSTOM_TRI
@@ -289,6 +293,9 @@ static const servoMixer_t servoMixerGimbal[] = {
     { SERVO_GIMBAL_ROLL, INPUT_GIMBAL_ROLL,  125, 0, 0, 100, 0 },
 };
 
+static const servoMixer_t servoMixerTilt[] = {
+    { SERVO_TILTING, INPUT_TILT_PITCH, 100, 0, 0, 100, 0 },
+};
 
 const mixerRules_t servoMixers[] = {
     { 0, NULL },                // entry 0
@@ -314,6 +321,8 @@ const mixerRules_t servoMixers[] = {
     { COUNT_SERVO_RULES(servoMixerDual), servoMixerDual },      // MULTITYPE_DUALCOPTER
     { COUNT_SERVO_RULES(servoMixerSingle), servoMixerSingle },    // MULTITYPE_SINGLECOPTER
     { 0, NULL },                // MULTITYPE_ATAIL4
+    { COUNT_SERVO_RULES(servoMixerTilt), servoMixerTilt },      // MIXER_QUADX_TILT
+    { COUNT_SERVO_RULES(servoMixerTilt), servoMixerTilt },	// MIXER_OCTOX_TILT
     { 0, NULL },                // MULTITYPE_CUSTOM
     { 0, NULL },                // MULTITYPE_CUSTOM_PLANE
     { 0, NULL },                // MULTITYPE_CUSTOM_TRI
@@ -329,6 +338,7 @@ void mixerUseConfigs(
 #ifdef USE_SERVOS
         servoParam_t *servoConfToUse,
         gimbalConfig_t *gimbalConfigToUse,
+        tiltArmConfig_t *tiltArmConfigToUse,
 #endif
         flight3DConfig_t *flight3DConfigToUse,
         escAndServoConfig_t *escAndServoConfigToUse,
@@ -339,6 +349,7 @@ void mixerUseConfigs(
 #ifdef USE_SERVOS
     servoConf = servoConfToUse;
     gimbalConfig = gimbalConfigToUse;
+    tiltArmConfig = tiltArmConfigToUse;
 #endif
     flight3DConfig = flight3DConfigToUse;
     escAndServoConfig = escAndServoConfigToUse;
@@ -560,6 +571,131 @@ static void updateGimbalServos(uint8_t firstServoIndex)
     pwmWriteServo(firstServoIndex + 1, servo[SERVO_GIMBAL_ROLL]);
 }
 
+static int16_t radiansToChannel(uint8_t servo_index, float angle_radians) {
+    // normalize angle to range -PI to PI
+    while (angle_radians > M_PIf)
+        angle_radians -= M_PIf * 2;
+    while (angle_radians < -M_PIf)
+        angle_radians += M_PIf * 2;
+
+    //remap input value (RX limit) to output value (Servo limit), also take into account eventual non-linearity of the two half range
+    if (angle_radians > 0) {
+        angle_radians = scaleRangef(angle_radians, 0, degreesToRadians(servoConf[servo_index].angleAtMax), 0, 500);
+    } else {
+        angle_radians = scaleRangef(angle_radians, 0, -degreesToRadians(servoConf[servo_index].angleAtMin), 0, -500);
+    }
+
+    //just to be sure it is in range, because float
+    return constrain(angle_radians, -500, 500);
+}
+
+static float channelToRadians(uint8_t servo_index, int16_t channel) {
+    //check input
+    channel = constrain(channel, -500, 500);
+
+    float angle;
+    //take into account eventual non-linearity of the range
+    if (channel > 0){
+        angle = scaleRangef(channel, 0, 500, 0,  degreesToRadians(servoConf[servo_index].angleAtMax) );
+    }else{
+        angle = scaleRangef(channel, 0, -500, 0, -degreesToRadians(servoConf[servo_index].angleAtMin) );
+    }
+
+    return angle;
+}
+
+uint8_t hasTiltingMotor() {
+    return currentMixerMode == MIXER_QUADX_TILT || currentMixerMode == MIXER_OCTOX_TILT;
+}
+
+/*
+ * return a float in range [-PI/2:+PI/2] witch represent the actual servo inclination wanted
+ */
+float requestedTiltServoAngle() {
+    int16_t userInput = 0;
+    uint8_t isFixedPitch = false;
+    //get wanted position of the tilting servo
+    if (rcData[tiltArmConfig->channel] >= rxConfig->midrc) {
+        userInput = rcData[tiltArmConfig->channel] - 1500;
+        isFixedPitch = true;
+    } else {
+        userInput = rcCommand[PITCH]; //use rcCommand so we get expo and deadband
+    }
+
+    float servoAngle = 0;
+
+    if ( !FLIGHT_MODE(ANGLE_MODE) && !FLIGHT_MODE(HORIZON_MODE) && !isFixedPitch) {
+
+        //TODO: change this hardcoded value to something user can select; those affect the speed of the servo in rate mode
+        //user input is from -500 to 500, we want to scale it from -10deg to +10deg
+        float servoSpeed;
+        if (userInput > 0) {
+            servoSpeed = scaleRangef( userInput, 0, 500, 0, 0.017f );
+        } else {
+            servoSpeed = scaleRangef( userInput, 0, -500, 0, -0.017f);
+        }
+
+        lastServoAngleTilt += (servoSpeed * tiltArmConfig->gearRatioPercent) / 100.0f;
+
+        // prevent overshot and overflow/windup
+        lastServoAngleTilt = constrainf(lastServoAngleTilt, -degreesToRadians(servoConf[SERVO_TILTING].angleAtMin), degreesToRadians(servoConf[SERVO_TILTING].angleAtMax));
+
+        servoAngle = lastServoAngleTilt;
+    } else {
+        lastServoAngleTilt = 0; //reset
+
+        servoAngle = channelToRadians(SERVO_TILTING, userInput);
+
+        servoAngle = (servoAngle * tiltArmConfig->gearRatioPercent) / 100.0f;
+    }
+    
+    return servoAngle;
+}
+
+void mixTilting(void) {
+    float angleTilt = requestedTiltServoAngle();
+    float tmpCosine = cos_approx(angleTilt);
+
+    if (tiltArmConfig->flagEnabled & TILT_ARM_ENABLE_THRUST_COMPENSATION) {
+        // compensate the throttle because motor orientation
+        float pitchToCompensate = angleTilt;
+
+        float bodyPitch = degreesToRadians(inclination.values.pitchDeciDegrees);
+        if (tiltArmConfig->flagEnabled & TILT_ARM_ENABLE_THRUST_BODY_COMPENSATION) {
+            pitchToCompensate += bodyPitch;
+        }
+
+        pitchToCompensate = ABS(pitchToCompensate); //we compensate in the same way if up or down.
+
+        if (pitchToCompensate > 0 && angleTilt + bodyPitch < M_PIf / 2) { //if there is something to compensate, and only from 0 to 90, otherwise it will push you into the ground
+            uint16_t liftOffTrust = ((rxConfig->maxcheck - rxConfig->mincheck) * tiltArmConfig->thrustLiftoffPercent) / 100; //force this order so we don't need float!
+            uint16_t liftOffLimit = ((rcCommand[THROTTLE] - (rxConfig->maxcheck - rxConfig->mincheck)) * 80) / 100; //we will artificially limit the trust compensation to 80% of remaining trust
+
+            float tmp_cos_compensate = cos_approx(pitchToCompensate);
+            if (tmp_cos_compensate != 0) { //it may be zero if the pitchToCOmpensate is 90°, also if it is very close due to float approximation.
+                float compensation = liftOffTrust / tmp_cos_compensate; //absolute value because we want to increase power even if breaking
+
+                if (compensation > 0) { //prevent overflow
+                    rcCommand[THROTTLE] += (compensation < liftOffLimit) ? compensation : liftOffLimit;
+                }
+            }
+        }
+    }
+
+    //compensate the roll and yaw because motor orientation
+    if (tiltArmConfig->flagEnabled & TILT_ARM_ENABLE_YAW_ROLL_COMPENSATION) {
+
+        // ***** quick and dirty compensation to test *****
+        float rollCompensation = axisPID[ROLL] * tmpCosine;
+        float rollCompensationInv = axisPID[ROLL] - rollCompensation;
+        float yawCompensation = axisPID[YAW] * tmpCosine;
+        float yawCompensationInv = axisPID[YAW] - yawCompensation;
+
+        axisPID[ROLL] = yawCompensationInv + rollCompensation;
+        axisPID[YAW] = yawCompensation + rollCompensationInv;
+    }
+}
+
 void writeServos(void)
 {
     uint8_t servoIndex = 0;
@@ -593,7 +729,7 @@ void writeServos(void)
             pwmWriteServo(servoIndex++, servo[SERVO_DUALCOPTER_LEFT]);
             pwmWriteServo(servoIndex++, servo[SERVO_DUALCOPTER_RIGHT]);
             break;
-
+	
         case MIXER_CUSTOM_AIRPLANE:
         case MIXER_AIRPLANE:
             for (int i = SERVO_PLANE_INDEX_MIN; i <= SERVO_PLANE_INDEX_MAX; i++) {
@@ -605,6 +741,17 @@ void writeServos(void)
             for (int i = SERVO_SINGLECOPTER_INDEX_MIN; i <= SERVO_SINGLECOPTER_INDEX_MAX; i++) {
                 pwmWriteServo(servoIndex++, servo[i]);
             }
+            break;
+
+        case MIXER_QUADX_TILT:
+        case MIXER_OCTOX_TILT:
+			// only update the servo using tilt calculation when armed
+			// otherwise just center it because the tilt code creates drifting signal when disarmed
+			if(ARMING_FLAG(ARMED)){
+            	pwmWriteServo(servoIndex++, servo[SERVO_TILTING]);
+			} else {
+            	pwmWriteServo(servoIndex++, 1500);
+			}
             break;
 
         default:
@@ -689,6 +836,14 @@ STATIC_UNIT_TESTED void servoMixer(void)
 
     input[INPUT_STABILIZED_THROTTLE] = motor[0] - 1000 - 500;  // Since it derives from rcCommand or mincommand and must be [-500:+500]
 
+    if (hasTiltingMotor()) {
+        float actualTilt = requestedTiltServoAngle();
+
+        input[INPUT_TILT_PITCH] = radiansToChannel(SERVO_TILTING, actualTilt);
+    } else {
+        input[INPUT_TILT_PITCH] = 0;
+    }
+
     // center the RC input value around the RC middle value
     // by subtracting the RC middle value from the RC input value, we get:
     // data - middle = input
@@ -743,6 +898,12 @@ STATIC_UNIT_TESTED void servoMixer(void)
 void mixTable(void)
 {
     uint32_t i;
+
+#ifdef USE_SERVOS
+    if (hasTiltingMotor()) {
+        mixTilting();
+    }
+#endif
 
     if (motorCount >= 4 && mixerConfig->yaw_jump_prevention_limit < YAW_JUMP_PREVENTION_LIMIT_HIGH) {
         // prevent "yaw jump" during yaw correction
@@ -826,6 +987,8 @@ void mixTable(void)
         case MIXER_DUALCOPTER:
         case MIXER_SINGLECOPTER:
         case MIXER_GIMBAL:
+    	case MIXER_QUADX_TILT:
+    	case MIXER_OCTOX_TILT:
             servoMixer();
             break;
 

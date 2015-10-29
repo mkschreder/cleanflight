@@ -58,6 +58,7 @@
 #include "io/serial_cli.h"
 #include "io/serial_msp.h"
 #include "io/statusindicator.h"
+#include "io/tilt_arm_control.h"
 
 #include "rx/rx.h"
 #include "rx/msp.h"
@@ -841,14 +842,35 @@ void loop(void)
         }
 #endif
 
+#ifdef USE_SERVOS
+        //TODO: is good here?
+        //pitch divider for drone with tilt arm, needed to tell PID that we want to be horizontal
+        int16_t tmpPitch = rcCommand[PITCH];
+        if ( (masterConfig.mixerMode == MIXER_QUADX_TILT || masterConfig.mixerMode == MIXER_OCTOX_TILT) && (currentProfile->tiltArm.flagEnabled & TILT_ARM_ENABLE_PITCH_DIVIDER) ) {
+            // compensate the pitch if in dynamic mode to be less aggressive
+            if (rcData[currentProfile->tiltArm.channel] < masterConfig.rxConfig.midrc) {
+       	        rcCommand[PITCH] /= currentProfile->tiltArm.pitchDivisior;
+       	    }
+       	}
+#endif
         // PID - note this is function pointer set by setPIDController()
         pid_controller(
             &currentProfile->pidProfile,
             currentControlRateProfile,
             masterConfig.max_angle_inclination,
             &currentProfile->accelerometerTrims,
-            &masterConfig.rxConfig
+            &masterConfig.rxConfig//,
+            //masterConfig.mixerMode
+#ifdef USE_SERVOS
+            //,
+            //&currentProfile->tiltArm
+#endif
         );
+
+#ifdef USE_SERVOS
+        // set back PITCH to original value before pitch divider
+        rcCommand[PITCH] = tmpPitch;
+#endif
 
         mixTable();
 
