@@ -1422,9 +1422,7 @@ static bool processInCommand(void)
             debug[0] = currentPort->dataSize;
             headSerialError(0);
         } else {
-            uint8_t servoCount;
-
-            servoCount = currentPort->dataSize / (sizeof(servoParam_t) - 3);
+            const uint8_t servoCount = currentPort->dataSize / (sizeof(servoParam_t) - 3);
 
             for (i = 0; i < MAX_SUPPORTED_SERVOS && i < servoCount; i++) {
                 currentProfile->servoConf[i].min = read16();
@@ -1445,8 +1443,13 @@ static bool processInCommand(void)
         break;
     case MSP_SET_SERVO_ANGLE:
 #ifdef USE_SERVOS
-        currentProfile->servoConf[i].angleAtMin = read8();
-        currentProfile->servoConf[i].angleAtMax = read8();
+        ;
+        const uint8_t servoCount = currentPort->dataSize / 2;
+
+        for (i = 0; i < MAX_SUPPORTED_SERVOS && i < servoCount; i++) {
+            currentProfile->servoConf[i].angleAtMin = read8();
+            currentProfile->servoConf[i].angleAtMax = read8();
+        }
 #endif
         break;
     case MSP_SET_TILT_ARM:

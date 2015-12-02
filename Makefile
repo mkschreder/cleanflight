@@ -18,7 +18,7 @@
 TARGET		?= NAZE
 
 # Compile-time options
-OPTIONS		?=
+OPTIONS		?= Wall
 
 # compile for OpenPilot BootLoader support
 OPBL ?=no
