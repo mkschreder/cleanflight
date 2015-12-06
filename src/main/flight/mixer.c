@@ -567,27 +567,18 @@ uint8_t hasTiltingMotor() {
  * return a float in range [-PI/2:+PI/2] witch represent the actual servo inclination wanted
  */
 float requestedTiltServoAngle() {
-    uint16_t userInput = 0;
-    uint8_t isFixedPitch = false;
-    //get wanted position of the tilting servo
-    if (rcData[tiltArmConfig->channel] >= rxConfig->midrc) {
-        userInput = rcData[tiltArmConfig->channel];
-        isFixedPitch = true;
-    } else {
-        userInput = rcData[PITCH];
-    }
-
+    const uint16_t userInput = rcData[PITCH] - 1500;
     float servoAngle = 0;
-    if ( !FLIGHT_MODE(ANGLE_MODE) && !FLIGHT_MODE(HORIZON_MODE) && !isFixedPitch ) {
+    
+    if ( !FLIGHT_MODE(ANGLE_MODE) && !FLIGHT_MODE(HORIZON_MODE)) {
         //user input is from 1000 to 2000, we want to scale it from -10deg to +10deg
-        float servoAngle;
-        if (userInput > 1500) {
-            servoAngle = scaleRangef(userInput, 1600, 2000, 0, 0.017f);
+        if (userInput > 0) {
+            servoAngle = scaleRangef(userInput, 100, 500, 0, (0.017f* tiltArmConfig->gearRatioPercent)/100);
             if (servoAngle < 0) { //dead band
                 servoAngle = 0;
             }
         } else {
-            servoAngle = scaleRangef(userInput, 1400, 1000, 0, -0.017f);
+            servoAngle = scaleRangef(userInput, -100, -500, 0, (-0.017f* tiltArmConfig->gearRatioPercent)/100);
             if (servoAngle > 0) { //dead band
                 servoAngle = 0;
             }
@@ -603,18 +594,17 @@ float requestedTiltServoAngle() {
         lastServoAngleTilt = 0; //reset
 
         //convert to radiant, keep eventual non-linearity of range
-        if (userInput > 1500)
-            servoAngle = scaleRangef(userInput, 1500, 2000, 0, degreesToRadians(servoConf[TILTING_SERVO].angleAtMax));
+        if (userInput > 0)
+            servoAngle = scaleRangef(userInput, 0, 500, 0, degreesToRadians(servoConf[TILTING_SERVO].angleAtMax));
         else
-            servoAngle = scaleRangef(userInput, 1000, 1500, -degreesToRadians(servoConf[TILTING_SERVO].angleAtMin), 0);
-
+            servoAngle = scaleRangef(userInput, 0, -500, 0,-degreesToRadians(servoConf[TILTING_SERVO].angleAtMin));
         servoAngle = (servoAngle * tiltArmConfig->gearRatioPercent) / 100.0f;
-    }
-    return servoAngle;
+    }   
+    return constrainf(servoAngle, -degreesToRadians(servoConf[TILTING_SERVO].angleAtMin), degreesToRadians(servoConf[TILTING_SERVO].angleAtMax));
 }
 
 void servoTilting(void) {
-    float actualTilt = requestedTiltServoAngle();
+     float actualTilt = requestedTiltServoAngle() - degreesToRadians(inclination.values.pitchDeciDegrees/10);
 
     //do we need to invert the Servo direction?
     if (servoConf[TILTING_SERVO].rate & 1) {
@@ -625,27 +615,26 @@ void servoTilting(void) {
 }
 
 void mixTilting(void) {
-    float angleTilt = requestedTiltServoAngle();
-    float tmpCosine = cosf(angleTilt);
+    const float angleTilt = requestedTiltServoAngle();
+    const float pitchToCompensate = angleTilt;
 
-    if (hasTiltingMotor() && (tiltArmConfig->flagEnabled & TILT_ARM_ENABLE_THRUST)) {
+    if ( hasTiltingMotor() && (tiltArmConfig->flagEnabled & TILT_ARM_ENABLE_THRUST) ) {
         // compensate the throttle because motor orientation
-        float pitchToCompensate = angleTilt;
 
-        float bodyPitch = degreesToRadians(inclination.values.pitchDeciDegrees);
-        if (tiltArmConfig->flagEnabled & TILT_ARM_ENABLE_THRUST_BODY) {
-            pitchToCompensate += bodyPitch;
-        }
+        //float bodyPitch = degreesToRadians(inclination.values.pitchDeciDegrees/10); //TODO bug fix, divide by 10
+        //if (tiltArmConfig->flagEnabled & TILT_ARM_ENABLE_THRUST_BODY) {
+        //   pitchToCompensate += bodyPitch;
+        //}
 
-        pitchToCompensate = ABS(pitchToCompensate); //we compensate in the same way if up or down.
+        const float pitchToCompensateABS = ABS(pitchToCompensate); //we compensate in the same way if up or down.
 
-        if (pitchToCompensate > 0 && angleTilt + bodyPitch < M_PIf / 2) { //if there is something to compensate, and only from 0 to 90, otherwise it will push you into the ground
-            uint16_t liftOffTrust = ((rxConfig->maxcheck - rxConfig->mincheck) * tiltArmConfig->thrustLiftoffPercent) / 100; //force this order so we don't need float!
-            uint16_t liftOffLimit = ( (rcCommand[THROTTLE]-(rxConfig->maxcheck - rxConfig->mincheck)) * 80) / 100; //we will artificially limit the trust compensation to 80% of remaining trust
+        if (pitchToCompensateABS> 0 && angleTilt < M_PIf / 2) { //if there is something to compensate, and only from 0 to 90, otherwise it will push you into the ground
+            const uint16_t liftOffTrust = ((rxConfig->maxcheck - rxConfig->mincheck) * tiltArmConfig->thrustLiftoffPercent) / 100; //force this order so we don't need float!
+            const uint16_t liftOffLimit = ( (rcCommand[THROTTLE]-(rxConfig->maxcheck - rxConfig->mincheck)) * 80L) / 100; //we will artificially limit the trust compensation to 80% of remaining trust
 
-            float tmp_cos_compensate = cosf(pitchToCompensate);
+            const float tmp_cos_compensate = cosf(pitchToCompensateABS);
             if (tmp_cos_compensate != 0) { //it may be zero if the pitchToCOmpensate is 90°, also if it is very close due to float approximation.
-                float compensation = liftOffTrust / tmp_cos_compensate; //absolute value because we want to increase power even if breaking
+                const float compensation = liftOffTrust / tmp_cos_compensate; //absolute value because we want to increase power even if breaking
 
                 if (compensation > 0) { //prevent overflow
                     rcCommand[THROTTLE] += fmin(compensation, liftOffLimit);
@@ -657,11 +646,13 @@ void mixTilting(void) {
     //compensate the roll and yaw because motor orientation
     if (tiltArmConfig->flagEnabled & TILT_ARM_ENABLE_YAW_ROLL) {
 
+        const float actualTilt = pitchToCompensate - degreesToRadians(inclination.values.pitchDeciDegrees/10);
         // ***** quick and dirty compensation to test *****
-        float rollCompensation = axisPID[ROLL] * tmpCosine;
-        float rollCompensationInv = axisPID[ROLL] - rollCompensation;
-        float yawCompensation = axisPID[YAW] * tmpCosine;
-        float yawCompensationInv = axisPID[YAW] - yawCompensation;
+        const float tmpCosine = cosf(actualTilt);
+        const float rollCompensation = axisPID[ROLL] * tmpCosine;
+        const float rollCompensationInv = axisPID[ROLL] - rollCompensation;
+        const float yawCompensation = axisPID[YAW] * tmpCosine;
+        const float yawCompensationInv = axisPID[YAW] - yawCompensation;
 
         axisPID[ROLL] = yawCompensationInv + rollCompensation;
         axisPID[YAW] = yawCompensation + rollCompensationInv;

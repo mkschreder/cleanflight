@@ -722,10 +722,13 @@ void loop(void)
         //TODO: is good here?
         if ( (masterConfig.mixerMode == MIXER_QUADX_TILT || masterConfig.mixerMode == MIXER_OCTOX_TILT) && (currentProfile->tiltArm.flagEnabled & TILT_ARM_ENABLE_PITCH) ) {
             // compensate the pitch if in dynamic mode to be less aggressive
-            if (rcData[currentProfile->tiltArm.channel] < masterConfig.rxConfig.midrc) {
-       	        rcCommand[PITCH] /= currentProfile->tiltArm.pitchDivisior;
-       	    }
-       	}
+            //if (rcData[currentProfile->tiltArm.channel] < masterConfig.rxConfig.midrc) {
+            rcCommand[PITCH] /= currentProfile->tiltArm.pitchDivisior;
+            //}
+            //TODO: ALEX moved outside of if.
+            rcCommand[PITCH] += scaleRange(rcData[currentProfile->tiltArm.channel], 1000, 2000, -500, 500);
+            rcCommand[PITCH] = constrain(rcCommand[PITCH], -500, 500);   
+        }
 #endif
         // PID - note this is function pointer set by setPIDController()
         pid_controller(
