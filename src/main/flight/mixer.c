@@ -547,9 +547,9 @@ void radiantWriteServo(uint8_t index, float angle) {
 
     //remap input value (RX limit) to output value (Servo limit), also take into account eventual non-linearity of the full range
     if (angle > 0) {
-        angle = scaleRangef(angle, 0, +M_PIf / 2, servoConf[index].middle, servoConf[index].max);
+        angle = scaleRangef(angle, 0, -M_PIf / 2, servoConf[index].middle, servoConf[index].max);
     } else {
-        angle = scaleRangef(angle, 0, -M_PIf / 2, servoConf[index].middle, servoConf[index].min);
+        angle = scaleRangef(angle, 0, +M_PIf / 2, servoConf[index].middle, servoConf[index].min);
     }
 
     //just to be sure
@@ -567,24 +567,24 @@ uint8_t hasTiltingMotor() {
  * return a float in range [-PI/2:+PI/2] witch represent the actual servo inclination wanted
  */
 float requestedTiltServoAngle() {
-    const uint16_t userInput = rcData[PITCH] - 1500;
+    const int16_t userInput = rcData[PITCH] - 1500;
     float servoAngle = 0;
     
     if ( !FLIGHT_MODE(ANGLE_MODE) && !FLIGHT_MODE(HORIZON_MODE)) {
         //user input is from 1000 to 2000, we want to scale it from -10deg to +10deg
         if (userInput > 0) {
-            servoAngle = scaleRangef(userInput, 100, 500, 0, (0.017f* tiltArmConfig->gearRatioPercent)/100);
+            servoAngle = scaleRangef(userInput, 100, 500, 0, 0.017f);
             if (servoAngle < 0) { //dead band
                 servoAngle = 0;
             }
         } else {
-            servoAngle = scaleRangef(userInput, -100, -500, 0, (-0.017f* tiltArmConfig->gearRatioPercent)/100);
+            servoAngle = scaleRangef(userInput, -100, -500, 0, -0.017f);
             if (servoAngle > 0) { //dead band
                 servoAngle = 0;
             }
         }
 
-        lastServoAngleTilt += servoAngle;
+        lastServoAngleTilt += (servoAngle * tiltArmConfig->gearRatioPercent)/100;
 
         // just to be sure
         lastServoAngleTilt = constrainf(lastServoAngleTilt, -degreesToRadians(servoConf[TILTING_SERVO].angleAtMin), degreesToRadians(servoConf[TILTING_SERVO].angleAtMax));
