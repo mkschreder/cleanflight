@@ -647,7 +647,7 @@ void mixTilting(void) {
     const float angleTilt = requestedTiltServoAngle();
     const float pitchToCompensate = angleTilt;
 
-    if ( hasTiltingMotor() && (tiltArmConfig->flagEnabled & TILT_ARM_ENABLE_THRUST) ) {
+    if ( hasTiltingMotor() && (tiltArmConfig->flagEnabled & TILT_ARM_ENABLE_THRUST_COMPENSATION) ) {
         // compensate the throttle because motor orientation
 
         const float pitchToCompensateABS = ABS(pitchToCompensate); //we compensate in the same way if up or down.
@@ -671,7 +671,7 @@ void mixTilting(void) {
 
         const float actualTilt = pitchToCompensate - degreesToRadians(inclination.values.pitchDeciDegrees/10);
         // ***** quick and dirty compensation to test *****
-        const float tmpCosine = cosf(actualTilt);
+        const float tmpCosine = cos_approx(actualTilt);
         const float rollCompensation = axisPID[ROLL] * tmpCosine;
         const float rollCompensationInv = axisPID[ROLL] - rollCompensation;
         const float yawCompensation = axisPID[YAW] * tmpCosine;
