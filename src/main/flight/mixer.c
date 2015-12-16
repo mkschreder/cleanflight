@@ -331,7 +331,6 @@ const mixerRules_t servoMixers[] = {
 static servoMixer_t *customServoMixers;
 #endif
 
-
 static motorMixer_t *customMixers;
 
 void mixerUseConfigs(
@@ -595,10 +594,10 @@ static float channelToRadians(uint8_t servo_index, int16_t channel) {
 
     float angle;
     //take into account eventual non-linearity of the range
-    if (channel > 0){
-        angle = scaleRangef(channel, 0, 500, 0,  degreesToRadians(servoConf[servo_index].angleAtMax) );
-    }else{
-        angle = scaleRangef(channel, 0, -500, 0, -degreesToRadians(servoConf[servo_index].angleAtMin) );
+    if (channel > 0) {
+        angle = scaleRangef(channel, 0, 500, 0, degreesToRadians(servoConf[servo_index].angleAtMax));
+    } else {
+        angle = scaleRangef(channel, 0, -500, 0, -degreesToRadians(servoConf[servo_index].angleAtMin));
     }
 
     return angle;
@@ -611,7 +610,7 @@ uint8_t hasTiltingMotor() {
 /*
  * return a float in range [-PI/2:+PI/2] witch represent the actual servo inclination wanted
  */
-float requestedTiltServoAngle() {
+float getTiltServoAngle() {
 
     const int16_t userInput = rcCommand[PITCH];
     float servoAngle = 0;
@@ -620,9 +619,9 @@ float requestedTiltServoAngle() {
         //user input is from -500 to 500, we want to scale it from -10deg to +10deg
         float servoSpeed;
         if (userInput > 0) {
-            servoSpeed = scaleRangef( userInput, 0, 500, 0, 0.017f );
+            servoSpeed = scaleRangef(userInput, 0, 500, 0, 0.017f);
         } else {
-            servoSpeed = scaleRangef( userInput, 0, -500, 0, -0.017f);
+            servoSpeed = scaleRangef(userInput, 0, -500, 0, -0.017f);
         }
 
         lastServoAngleTilt += (servoSpeed * tiltArmConfig->gearRatioPercent) / 100.0f;
@@ -642,18 +641,17 @@ float requestedTiltServoAngle() {
     return servoAngle;
 }
 
-
 void mixTilting(void) {
-    const float angleTilt = requestedTiltServoAngle();
+    const float angleTilt = getTiltServoAngle();
     const float pitchToCompensate = angleTilt;
 
     if ( hasTiltingMotor() && (tiltArmConfig->flagEnabled & TILT_ARM_ENABLE_THRUST_COMPENSATION) ) {
         // compensate the throttle because motor orientation
 
         const float pitchToCompensateABS = ABS(pitchToCompensate); //we compensate in the same way if up or down.
-        if (pitchToCompensateABS> 0 && angleTilt < M_PIf / 2) { //if there is something to compensate, and only from 0 to 90, otherwise it will push you into the ground
+        if (pitchToCompensateABS > 0 && angleTilt < M_PIf / 2) { //if there is something to compensate, and only from 0 to 90, otherwise it will push you into the ground
             const uint16_t liftOffTrust = ((rxConfig->maxcheck - rxConfig->mincheck) * tiltArmConfig->thrustLiftoffPercent) / 100; //force this order so we don't need float!
-            const uint16_t liftOffLimit = ( (rcCommand[THROTTLE]-(rxConfig->maxcheck - rxConfig->mincheck)) * 80L) / 100; //we will artificially limit the trust compensation to 80% of remaining trust
+            const uint16_t liftOffLimit = ((rcCommand[THROTTLE] - (rxConfig->maxcheck - rxConfig->mincheck)) * 80L) / 100; //we will artificially limit the trust compensation to 80% of remaining trust
             const float tmp_cos_compensate = cos_approx(pitchToCompensateABS);
 
             if (tmp_cos_compensate != 0) { //it may be zero if the pitchToCOmpensate is 90°, also if it is very close due to float approximation.
@@ -669,7 +667,7 @@ void mixTilting(void) {
     //compensate the roll and yaw because motor orientation
     if (tiltArmConfig->flagEnabled & TILT_ARM_ENABLE_YAW_ROLL_COMPENSATION) {
 
-        const float actualTilt = pitchToCompensate - degreesToRadians(inclination.values.pitchDeciDegrees/10);
+        const float actualTilt = pitchToCompensate - degreesToRadians(inclination.values.pitchDeciDegrees / 10);
         // ***** quick and dirty compensation to test *****
         const float tmpCosine = cos_approx(actualTilt);
         const float rollCompensation = axisPID[ROLL] * tmpCosine;
@@ -817,7 +815,7 @@ STATIC_UNIT_TESTED void servoMixer(void)
     input[INPUT_STABILIZED_THROTTLE] = motor[0] - 1000 - 500;  // Since it derives from rcCommand or mincommand and must be [-500:+500]
 
     if (hasTiltingMotor()) {
-        float actualTilt = requestedTiltServoAngle();
+        float actualTilt = getTiltServoAngle();
 
         input[INPUT_TILT_PITCH] = radiansToChannel(SERVO_TILTING, actualTilt);
     } else {
@@ -852,23 +850,31 @@ STATIC_UNIT_TESTED void servoMixer(void)
             int16_t min = currentServoMixer[i].min * servo_width / 100 - servo_width / 2;
             int16_t max = currentServoMixer[i].max * servo_width / 100 - servo_width / 2;
 
-            if (currentServoMixer[i].speed == 0)
-                currentOutput[i] = input[from];
-            else {
-                if (currentOutput[i] < input[from])
-                    currentOutput[i] = constrain(currentOutput[i] + currentServoMixer[i].speed, currentOutput[i], input[from]);
-                else if (currentOutput[i] > input[from])
-                    currentOutput[i] = constrain(currentOutput[i] - currentServoMixer[i].speed, input[from], currentOutput[i]);
+            // we want input to be scaled from -500 to 500
+            int16_t scaledInput;
+            if (input[from] > 0) {
+                scaledInput = scaleRange(input[from], 0, 500, 0, max);
+            } else {
+                scaledInput = scaleRange(input[from], 0, -500, 0, min);
             }
 
-            servo[target] += servoDirection(target, from) * constrain(((int32_t)currentOutput[i] * currentServoMixer[i].rate) / 100, min, max);
+            if (currentServoMixer[i].speed == 0) {
+                currentOutput[i] = scaledInput;
+            } else {
+                if (currentOutput[i] < scaledInput)
+                    currentOutput[i] = constrain(currentOutput[i] + currentServoMixer[i].speed, currentOutput[i], scaledInput);
+                else if (currentOutput[i] > scaledInput)
+                    currentOutput[i] = constrain(currentOutput[i] - currentServoMixer[i].speed, scaledInput, currentOutput[i]);
+            }
+
+            servo[target] += servoDirection(target, from) * constrain(((int32_t) currentOutput[i] * currentServoMixer[i].rate) / 100, min, max);
         } else {
             currentOutput[i] = 0;
         }
     }
 
     for (i = 0; i < MAX_SUPPORTED_SERVOS; i++) {
-        servo[i] = ((int32_t)servoConf[i].rate * servo[i]) / 100L;
+        servo[i] = ((int32_t) servoConf[i].rate * servo[i]) / 100L;
         servo[i] += determineServoMiddleOrForwardFromChannel(i);
     }
 }
@@ -974,7 +980,7 @@ void mixTable(void)
 
         /*
         case MIXER_GIMBAL:
-			servo[SERVO_GIMBAL_PITCH] = (((int32_t)servoConf[SERVO_GIMBAL_PITCH].rate * inclination.values.pitchDeciDegrees) / 50) + determineServoMiddleOrForwardFromChannel(SERVO_GIMBAL_PITCH);
+            servo[SERVO_GIMBAL_PITCH] = (((int32_t)servoConf[SERVO_GIMBAL_PITCH].rate * inclination.values.pitchDeciDegrees) / 50) + determineServoMiddleOrForwardFromChannel(SERVO_GIMBAL_PITCH);
             servo[SERVO_GIMBAL_ROLL] = (((int32_t)servoConf[SERVO_GIMBAL_ROLL].rate * inclination.values.rollDeciDegrees) / 50) + determineServoMiddleOrForwardFromChannel(SERVO_GIMBAL_ROLL);
             break;
         */
