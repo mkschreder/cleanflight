@@ -53,17 +53,17 @@ static void ECHO_EXTI_IRQHandler(void)
         if (timing_stop > timing_start) {
             measurement = timing_stop - timing_start;
         }
+
+		// reconfigure echo pin as output and output a zero to it
+		gpio_config_t gpio;
+		gpio.pin = sonarHardware->echo_pin;
+		gpio.mode = Mode_Out_PP;
+		gpio.speed = Speed_2MHz;
+		gpioInit(sonarHardware->echo_gpio, &gpio);
+		digitalLo(sonarHardware->echo_gpio, sonarHardware->echo_pin);
     }
 
-	// reconfigure echo pin as output and output a zero to it
-    gpio_config_t gpio;
-	gpio.pin = sonarHardware->echo_pin;
-    gpio.mode = Mode_Out_PP;
-    gpio.speed = Speed_2MHz;
-    gpioInit(sonarHardware->echo_gpio, &gpio);
-    digitalLo(sonarHardware->echo_gpio, sonarHardware->echo_pin);
-
-    EXTI_ClearITPendingBit(sonarHardware->exti_line);
+	EXTI_ClearITPendingBit(sonarHardware->exti_line);
 }
 
 void EXTI0_IRQHandler(void)
