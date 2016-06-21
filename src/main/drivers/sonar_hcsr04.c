@@ -55,6 +55,14 @@ static void ECHO_EXTI_IRQHandler(void)
         }
     }
 
+	// reconfigure echo pin as output and output a zero to it
+    gpio_config_t gpio;
+	gpio.pin = sonarHardware->echo_pin;
+    gpio.mode = Mode_Out_PP;
+    gpio.speed = Speed_2MHz;
+    gpioInit(sonarHardware->echo_gpio, &gpio);
+    digitalLo(sonarHardware->echo_gpio, sonarHardware->echo_pin);
+
     EXTI_ClearITPendingBit(sonarHardware->exti_line);
 }
 
@@ -135,6 +143,13 @@ void hcsr04_init(const sonarHardware_t *initialSonarHardware)
 void hcsr04_start_reading(void)
 {
     uint32_t now = millis();
+
+	// reconfigure echo pin as input
+    gpio_config_t gpio;
+    gpio.pin = sonarHardware->echo_pin;
+    gpio.mode = Mode_IN_FLOATING;
+    gpioInit(sonarHardware->echo_gpio, &gpio);
+    digitalHi(sonarHardware->echo_gpio, sonarHardware->echo_pin);
 
     if (now < (lastMeasurementAt + 60)) {
         // the repeat interval of trig signal should be greater than 60ms
