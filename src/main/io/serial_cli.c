@@ -2115,11 +2115,11 @@ static void cliMotor(char *cmdline)
             cliShowArgumentRangeError("value", 1000, 2000);
             return;
         } else {
-            motor_disarmed[motor_index] = motor_value;
+			mixer_set_motor_disarmed_pwm(motor_index, motor_value); 
         }
     }
 
-    cliPrintf("motor %d: %d\r\n", motor_index, motor_disarmed[motor_index]);
+    cliPrintf("motor %d: %d\r\n", motor_index, mixer_get_motor_disarmed_pwm(motor_index));
 }
 
 static void cliPlaySound(char *cmdline)
@@ -2380,6 +2380,7 @@ static void cliSet(char *cmdline)
 
                 bool changeValue = false;
                 int_float_value_t tmp;
+				memset(&tmp, 0, sizeof(tmp)); 
                 switch (valueTable[i].type & VALUE_MODE_MASK) {
                     case MODE_DIRECT: {
                             int32_t value = 0;

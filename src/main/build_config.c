@@ -34,6 +34,8 @@
 #error Motor configuration mismatch
 #endif
 
+#if 0
 #if MAX_PWM_SERVOS != MAX_SUPPORTED_SERVOS
 #error Servo configuration mismatch
+#endif
 #endif

@@ -46,6 +46,7 @@
 
 #include "flight/pid.h"
 #include "flight/imu.h"
+#include "flight/mixer.h"
 
 #include "blackbox/blackbox.h"
 
@@ -54,7 +55,6 @@
 #include "gtune.h"
 
 extern uint16_t cycleTime;
-extern uint8_t motorCount;
 
 /*
  ****************************************************************************
@@ -133,7 +133,7 @@ void init_Gtune(void)
 	}
 	updateDelayCycles();
 	for (i = 0; i < 3; i++) {
-        if ((gtuneConfig()->gtune_hilimP[i] && gtuneConfig()->gtune_lolimP[i] > gtuneConfig()->gtune_hilimP[i]) || (motorCount < 4 && i == FD_YAW)) { // User config error disable axisis for tuning
+        if ((gtuneConfig()->gtune_hilimP[i] && gtuneConfig()->gtune_lolimP[i] > gtuneConfig()->gtune_hilimP[i]) || (mixer_get_motor_count() < 4 && i == FD_YAW)) { // User config error disable axisis for tuning
             gtuneConfig()->gtune_hilimP[i] = 0;                                    // Disable YAW tuning for everything below a quadcopter
         }
         if(pidProfile()->P8[i] < gtuneConfig()->gtune_lolimP[i]) {

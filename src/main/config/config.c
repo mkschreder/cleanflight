@@ -165,7 +165,7 @@ static void activateConfig(void)
     setAccelerationTrims(&sensorTrims()->accZero);
 
 #ifdef USE_SERVOS
-    mixerUseConfigs(servoProfile()->servoConf);
+    //mixerUseConfigs(servoProfile()->servoConf);
 #endif
 
     recalculateMagneticDeclination();

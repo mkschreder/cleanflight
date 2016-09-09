@@ -328,7 +328,7 @@ void init(void)
 
     mixerInit(customMotorMixer(0));
 #ifdef USE_SERVOS
-    mixerInitServos(customServoMixer(0));
+    //mixerInitServos(customServoMixer(0));
 #endif
 
     memset(&pwm_params, 0, sizeof(pwm_params));

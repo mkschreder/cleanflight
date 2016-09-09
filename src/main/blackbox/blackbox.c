@@ -283,7 +283,7 @@ typedef struct blackboxMainState_s {
     int16_t gyroADC[XYZ_AXIS_COUNT];
     int16_t accSmooth[XYZ_AXIS_COUNT];
     int16_t motor[MAX_SUPPORTED_MOTORS];
-    int16_t servo[MAX_SUPPORTED_SERVOS];
+    //int16_t servo[MAX_SUPPORTED_SERVOS];
 
     uint16_t vbatLatest;
     uint16_t amperageLatest;
@@ -315,7 +315,7 @@ typedef struct blackboxSlowState_s {
 } __attribute__((__packed__)) blackboxSlowState_t; // We pack this struct so that padding doesn't interfere with memcmp()
 
 //From mixer.c:
-extern uint8_t motorCount;
+//extern uint8_t motorCount;
 
 //From mw.c:
 extern uint32_t currentTime;
@@ -394,7 +394,7 @@ static bool testBlackboxConditionUncached(FlightLogFieldCondition condition)
         case FLIGHT_LOG_FIELD_CONDITION_AT_LEAST_MOTORS_6:
         case FLIGHT_LOG_FIELD_CONDITION_AT_LEAST_MOTORS_7:
         case FLIGHT_LOG_FIELD_CONDITION_AT_LEAST_MOTORS_8:
-            return motorCount >= condition - FLIGHT_LOG_FIELD_CONDITION_AT_LEAST_MOTORS_1 + 1;
+            return mixer_get_motor_count() >= condition - FLIGHT_LOG_FIELD_CONDITION_AT_LEAST_MOTORS_1 + 1;
         
         case FLIGHT_LOG_FIELD_CONDITION_TRICOPTER:
             return mixerConfig()->mixerMode == MIXER_TRI || mixerConfig()->mixerMode == MIXER_CUSTOM_TRI;
@@ -569,14 +569,15 @@ static void writeIntraframe(void)
     blackboxWriteUnsignedVB(blackboxCurrent->motor[0] - motorAndServoConfig()->minthrottle);
 
     //Motors tend to be similar to each other so use the first motor's value as a predictor of the others
-    for (x = 1; x < motorCount; x++) {
+    for (x = 1; x < mixer_get_motor_count(); x++) {
         blackboxWriteSignedVB(blackboxCurrent->motor[x] - blackboxCurrent->motor[0]);
     }
 
+	/*
     if (testBlackboxCondition(FLIGHT_LOG_FIELD_CONDITION_TRICOPTER)) {
         //Assume the tail spends most of its time around the center
         blackboxWriteSignedVB(blackboxCurrent->servo[5] - 1500);
-    }
+    }*/
 
     //Rotate our history buffers:
 
@@ -692,11 +693,13 @@ static void writeInterframe(void)
     //Since gyros, accs and motors are noisy, base their predictions on the average of the history:
     blackboxWriteMainStateArrayUsingAveragePredictor(offsetof(blackboxMainState_t, gyroADC),   XYZ_AXIS_COUNT);
     blackboxWriteMainStateArrayUsingAveragePredictor(offsetof(blackboxMainState_t, accSmooth), XYZ_AXIS_COUNT);
-    blackboxWriteMainStateArrayUsingAveragePredictor(offsetof(blackboxMainState_t, motor),     motorCount);
+    blackboxWriteMainStateArrayUsingAveragePredictor(offsetof(blackboxMainState_t, motor),     mixer_get_motor_count());
 
+/*
     if (testBlackboxCondition(FLIGHT_LOG_FIELD_CONDITION_TRICOPTER)) {
         blackboxWriteSignedVB(blackboxCurrent->servo[5] - blackboxLast->servo[5]);
     }
+*/
 
     //Rotate our history buffers
     blackboxHistory[2] = blackboxHistory[1];
@@ -956,8 +959,8 @@ static void loadMainState(void)
         blackboxCurrent->accSmooth[i] = accSmooth[i];
     }
 
-    for (i = 0; i < motorCount; i++) {
-        blackboxCurrent->motor[i] = motor[i];
+    for (i = 0; i < mixer_get_motor_count(); i++) {
+        blackboxCurrent->motor[i] = mixer_get_motor_pwm(i);
     }
 
     blackboxCurrent->vbatLatest = vbatLatestADC;
@@ -981,8 +984,10 @@ static void loadMainState(void)
     blackboxCurrent->rssi = rssi;
 
 #ifdef USE_SERVOS
+#if 0
     //Tail servo for tricopters
-    blackboxCurrent->servo[5] = servo[5];
+    blackboxCurrent->servo[5] = mixer_get_servo_pwm(5);
+#endif
 #endif
 }
 

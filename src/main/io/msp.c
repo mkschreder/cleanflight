@@ -147,7 +147,7 @@ static const box_t boxes[CHECKBOX_ITEM_COUNT] = {
 static uint32_t activeBoxIds;
 
 // from mixer.c
-extern int16_t motor_disarmed[MAX_SUPPORTED_MOTORS];
+//extern int16_t motor_disarmed[MAX_SUPPORTED_MOTORS];
 
 // cause reboot after MSP processing complete
 bool isRebootScheduled = false;
@@ -605,6 +605,7 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
         }
 
 #ifdef USE_SERVOS
+#if 0
         case MSP_SERVO:
             sbufWriteData(dst, &servo, MAX_SUPPORTED_SERVOS * 2);
             break;
@@ -634,10 +635,11 @@ static int processOutCommand(mspPacket_t *cmd, mspPacket_t *reply)
             }
             break;
 #endif
+#endif
 
         case MSP_MOTOR:
             for (unsigned i = 0; i < 8; i++) {
-                sbufWriteU16(dst, i < MAX_SUPPORTED_MOTORS ? motor[i] : 0);
+                sbufWriteU16(dst, i < MAX_SUPPORTED_MOTORS ? mixer_get_motor_pwm(i) : 0);
             }
             break;
 
@@ -1197,7 +1199,7 @@ static int processInCommand(mspPacket_t *cmd)
             for (int i = 0; i < 8; i++) {
                 const int16_t disarmed = sbufReadU16(src);
                 if (i < MAX_SUPPORTED_MOTORS) {
-                    motor_disarmed[i] = disarmed;
+                    mixer_set_motor_disarmed_pwm(i, disarmed);
                 }
             }
             break;

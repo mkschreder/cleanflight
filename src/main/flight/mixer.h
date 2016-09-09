@@ -100,13 +100,20 @@ typedef struct motor3DConfig_s {
 PG_DECLARE(motor3DConfig_t, motor3DConfig);
 
 #define CHANNEL_FORWARDING_DISABLED (uint8_t)0xFF
-
+/*
 extern int16_t motor[MAX_SUPPORTED_MOTORS];
 extern int16_t motor_disarmed[MAX_SUPPORTED_MOTORS];
 
 extern bool motorLimitReached;
-
+*/
 void mixerInit(motorMixer_t *customMotorMixers);
+int16_t mixer_get_motor_pwm(uint8_t output_id); 
+void mixer_set_motor_disarmed_pwm(uint8_t output_id, int16_t pwm); 
+int16_t mixer_get_motor_disarmed_pwm(uint8_t output_id); 
+bool mixer_motor_limit_reached(void); 
+uint8_t mixer_get_motor_count(void); 
+bool mixer_uses_servos(uint8_t id); 
+
 void writeAllMotors(int16_t mc);
 void mixerLoadMix(int index, motorMixer_t *customMixers);
 void mixerResetDisarmedMotors(void);

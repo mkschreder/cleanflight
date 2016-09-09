@@ -26,6 +26,7 @@
 
 #include "build_config.h"
 
+#if 0
 #ifdef USE_SERVOS
 #ifndef USE_QUAD_MIXER_ONLY
 
@@ -61,14 +62,14 @@
 #include "flight/pid.h"
 #include "flight/imu.h"
 
-extern uint8_t motorCount;
-extern motorMixer_t *customMixers;
-extern mixer_t mixers[];
-extern motorMixer_t currentMixer[MAX_SUPPORTED_MOTORS];
+//extern uint8_t motorCount;
+//extern motorMixer_t *customMixers;
+//extern mixer_t mixers[];
+//extern motorMixer_t currentMixer[MAX_SUPPORTED_MOTORS];
 
 static uint8_t servoRuleCount = 0;
 static servoMixer_t currentServoMixer[MAX_SERVO_RULES];
-int16_t servo[MAX_SUPPORTED_SERVOS];
+static int16_t servo[MAX_SUPPORTED_SERVOS];
 static int useServo;
 STATIC_UNIT_TESTED uint8_t servoCount;
 static servoParam_t *servoConf;
@@ -143,7 +144,6 @@ static const servoMixer_t servoMixerGimbal[] = {
     { SERVO_GIMBAL_ROLL, INPUT_GIMBAL_ROLL,  125, 0, 0, 100, 0 },
 };
 
-
 const mixerRules_t servoMixers[] = {
     { 0, NULL },                // entry 0
     { COUNT_SERVO_RULES(servoMixerTri), servoMixerTri },       // MULTITYPE_TRI
@@ -178,6 +178,11 @@ static servoMixer_t *customServoMixers;
 void mixerUseConfigs(servoParam_t *servoConfToUse)
 {
     servoConf = servoConfToUse;
+}
+
+int16_t mixer_get_servo_pwm(uint8_t id){
+	if(id > MAX_SUPPORTED_SERVOS) return 0; 
+	return servo[id]; 
 }
 
 void mixerInitialiseServoFiltering(uint32_t targetLooptime)
@@ -215,7 +220,7 @@ void mixerInitServos(servoMixer_t *initialCustomServoMixers)
     customServoMixers = initialCustomServoMixers;
 
     // enable servos for mixes that require them. note, this shifts motor counts.
-    useServo = mixers[mixerConfig()->mixerMode].useServo;
+    useServo = mixer_uses_servos(mixerConfig()->mixerMode); 
     // if we want camstab/trig, that also enables servos, even if mixer doesn't
     if (feature(FEATURE_SERVO_TILT))
         useServo = 1;
@@ -230,8 +235,8 @@ void mixerUsePWMIOConfiguration(pwmIOConfiguration_t *pwmIOConfiguration)
 {
     int i;
 
-    motorCount = 0;
-    servoCount = pwmIOConfiguration->servoCount;
+    uint8_t mcount = 0;
+    uint8_t scount = pwmIOConfiguration->servoCount;
 
     if (mixerConfig()->mixerMode == MIXER_CUSTOM || mixerConfig()->mixerMode == MIXER_CUSTOM_TRI || mixerConfig()->mixerMode == MIXER_CUSTOM_AIRPLANE) {
         // load custom mixer into currentMixer
@@ -240,7 +245,7 @@ void mixerUsePWMIOConfiguration(pwmIOConfiguration_t *pwmIOConfiguration)
             if (customMixers[i].throttle == 0.0f)
                 break;
             currentMixer[i] = customMixers[i];
-            motorCount++;
+            mcount++;
         }
     } else {
         motorCount = mixers[mixerConfig()->mixerMode].motorCount;
@@ -261,8 +266,8 @@ void mixerUsePWMIOConfiguration(pwmIOConfiguration_t *pwmIOConfiguration)
 
     // in 3D mode, mixer gain has to be halved
     if (feature(FEATURE_3D)) {
-        if (motorCount > 1) {
-            for (i = 0; i < motorCount; i++) {
+        if (mcount > 1) {
+            for (i = 0; i < mcount; i++) {
                 currentMixer[i].pitch *= 0.5f;
                 currentMixer[i].roll *= 0.5f;
                 currentMixer[i].yaw *= 0.5f;
@@ -287,6 +292,9 @@ void mixerUsePWMIOConfiguration(pwmIOConfiguration_t *pwmIOConfiguration)
             loadCustomServoMixer();
         }
     }
+
+	mixer_set_motor_count(mcount); 
+	servoCount = scount; 
 
     mixerResetDisarmedMotors();
 }
@@ -431,7 +439,7 @@ STATIC_UNIT_TESTED void servoMixer(void)
     input[INPUT_GIMBAL_PITCH] = scaleRange(attitude.values.pitch, -1800, 1800, -500, +500);
     input[INPUT_GIMBAL_ROLL] = scaleRange(attitude.values.roll, -1800, 1800, -500, +500);
 
-    input[INPUT_STABILIZED_THROTTLE] = motor[0] - 1000 - 500;  // Since it derives from rcCommand or mincommand and must be [-500:+500]
+    input[INPUT_STABILIZED_THROTTLE] = mixer_get_motor_pwm(0) - 1000 - 500;  // Since it derives from rcCommand or mincommand and must be [-500:+500]
 
     // center the RC input value around the RC middle value
     // by subtracting the RC middle value from the RC input value, we get:
@@ -559,7 +567,7 @@ void filterServos(void)
     debug[0] = (int16_t)(micros() - startTime);
 #endif
 }
-
+#endif
 #endif // USE_QUAD_MIXER_ONLY
 #endif // USE_SERVOS
 

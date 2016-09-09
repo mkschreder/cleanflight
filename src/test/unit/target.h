@@ -23,7 +23,7 @@
 #define DISPLAY
 #define TELEMETRY
 #define LED_STRIP
-#define USE_SERVOS
+//#define USE_SERVOS
 #define TRANSPONDER
 #define USE_VCP
 #define USE_UART1

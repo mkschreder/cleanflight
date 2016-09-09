@@ -61,12 +61,12 @@
 
 //#define MIXER_DEBUG
 
-uint8_t motorCount;
+static uint8_t motorCount;
 
-int16_t motor[MAX_SUPPORTED_MOTORS];
-int16_t motor_disarmed[MAX_SUPPORTED_MOTORS];
+static int16_t motor[MAX_SUPPORTED_MOTORS];
+static int16_t motor_disarmed[MAX_SUPPORTED_MOTORS];
 
-bool motorLimitReached;
+static bool motorLimitReached;
 
 motorMixer_t currentMixer[MAX_SUPPORTED_MOTORS];
 
@@ -266,7 +266,7 @@ static const motorMixer_t mixerTricopter[] = {
 };
 
 // Keep synced with mixerMode_e
-const mixer_t mixers[] = {
+static const mixer_t mixers[] = {
     // motors, use servo, motor mixer
     { 0, false, NULL },                // entry 0
     { 3, true,  mixerTricopter },      // MIXER_TRI
@@ -310,17 +310,44 @@ const mixer_t mixers[] = {
     { 2, true,  mixerDualcopter },     // MIXER_DUALCOPTER
     { 1, true,  NULL },                // MIXER_SINGLECOPTER
     { 4, false, mixerAtail4 },         // MIXER_ATAIL4
-    { 0, false, NULL },                // MIXER_CUSTOM
+    { 4, true, mixerQuadX },                // MIXER_CUSTOM
     { 2, true,  NULL },                // MIXER_CUSTOM_AIRPLANE
     { 3, true,  NULL },                // MIXER_CUSTOM_TRI
 };
 #endif
 
-motorMixer_t *customMixers;
+static motorMixer_t *customMixers;
 
 void mixerInit(motorMixer_t *initialCustomMixers)
 {
     customMixers = initialCustomMixers;
+}
+
+int16_t mixer_get_motor_pwm(uint8_t output_id){
+	if(output_id > MAX_SUPPORTED_MOTORS) return 0; 
+	return motor[output_id]; 
+}
+
+void mixer_set_motor_disarmed_pwm(uint8_t id, int16_t pwm){
+	if(id > MAX_SUPPORTED_MOTORS) return; 
+	motor_disarmed[id] = pwm; 
+}
+
+int16_t mixer_get_motor_disarmed_pwm(uint8_t id) {
+	if(id > MAX_SUPPORTED_MOTORS) return 0; 
+	return motor_disarmed[id]; 
+}
+
+bool mixer_motor_limit_reached(void){
+	return motorLimitReached; 
+}
+
+uint8_t mixer_get_motor_count(void){
+	return motorCount; 
+}
+
+bool mixer_uses_servos(uint8_t id){
+	return mixers[id].useServo; 
 }
 
 #if !defined(USE_SERVOS) || defined(USE_QUAD_MIXER_ONLY)

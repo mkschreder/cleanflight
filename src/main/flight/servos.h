@@ -17,6 +17,7 @@
 
 #pragma once
 
+#if 0
 #if defined(USE_QUAD_MIXER_ONLY)
 #define MAX_SUPPORTED_SERVOS 1
 #else
@@ -123,7 +124,7 @@ struct gimbalConfig_s;
 struct motorAndServoConfig_s;
 struct rxConfig_s;
 
-extern int16_t servo[MAX_SUPPORTED_SERVOS];
+int16_t mixer_get_servo_pwm(uint8_t id); 
 bool isMixerUsingServos(void);
 void writeServos(void);
 void filterServos(void);
@@ -132,3 +133,4 @@ void mixerUseConfigs(servoParam_t *servoConfToUse);
 void servoMixerLoadMix(int index, servoMixer_t *customServoMixers);
 void loadCustomServoMixer(void);
 int servoDirection(int servoIndex, int fromChannel);
+#endif
