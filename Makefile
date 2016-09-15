@@ -852,7 +852,7 @@ endif
 
 DEBUG_FLAGS	 = -ggdb3 -DDEBUG
 
-CFLAGS		 = $(ARCH_FLAGS) \
+override CFLAGS		 := $(CFLAGS) $(ARCH_FLAGS) \
 		   $(LTO_FLAGS) \
 		   $(WARN_FLAGS) \
 		   $(addprefix -D,$(OPTIONS)) \
@@ -872,13 +872,13 @@ CFLAGS		 = $(ARCH_FLAGS) \
 		   -save-temps=obj \
 		   -MMD -MP
 
-ASFLAGS		 = $(ARCH_FLAGS) \
+override ASFLAGS		 := $(ASFLAGS) $(ARCH_FLAGS) \
 		   $(WARN_FLAGS) \
 		   -x assembler-with-cpp \
 		   $(addprefix -I,$(INCLUDE_DIRS)) \
 		  -MMD -MP
 
-LDFLAGS		 = -lm \
+override LDFLAGS		 := $(LDFLAGS) -lm \
 		   -nostartfiles \
 		   --specs=nano.specs \
 		   -lc \
@@ -1015,18 +1015,18 @@ $(TARGET_ELF):  $(TARGET_OBJS)
 $(OBJECT_DIR)/$(TARGET)/%.o: %.c
 	@mkdir -p $(dir $@)
 	@echo %% $(notdir $<)
-	@$(CC) -c -o $@ $(CFLAGS) $<
+	$(CC) -c -o $@ $(CFLAGS) $<
 
 # Assemble
 $(OBJECT_DIR)/$(TARGET)/%.o: %.s
 	@mkdir -p $(dir $@)
 	@echo %% $(notdir $<)
-	@$(CC) -c -o $@ $(ASFLAGS) $<
+	$(CC) -c -o $@ $(ASFLAGS) $<
 
 $(OBJECT_DIR)/$(TARGET)/%.o: %.S
 	@mkdir -p $(dir $@)
 	@echo %% $(notdir $<)
-	@$(CC) -c -o $@ $(ASFLAGS) $<
+	$(CC) -c -o $@ $(ASFLAGS) $<
 
 
 
